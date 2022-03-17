@@ -29,6 +29,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				var impsWithName []*ast.ImportSpec
 				for _, imp := range f.Imports {
 					if imp.Name != nil {
+						if imp.Name.String() == "." { // "."の場合は無視する。
+							continue
+						}
 						if strings.HasPrefix(imp.Name.String(), "_") { // アンダースコアで始まる名前(単独も含む)の場合は無視する。
 							continue
 						}
