@@ -21,3 +21,13 @@ deps-update:
 	@echo ">> Updating dependencies..."
 	go get -d -u -t ./...
 	@make deps
+
+.PHONY: tools
+tools: tools
+	@echo ">> Installing Go tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.1
+
+.PHONY: lint
+lint:
+	@echo ">> Linting source code..."
+	golangci-lint run ./...
