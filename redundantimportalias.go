@@ -9,7 +9,7 @@ import (
 	"golang.org/x/tools/go/analysis/singlechecker"
 )
 
-var a = &analysis.Analyzer{
+var analyzer = &analysis.Analyzer{
 	Name:             "redundantimportalias",
 	Doc:              "checks redundant import alias",
 	Run:              run,
@@ -17,36 +17,48 @@ var a = &analysis.Analyzer{
 }
 
 func main() {
-	singlechecker.Main(a)
+	singlechecker.Main(analyzer)
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, f := range pass.Files {
-		ast.Inspect(f, func(n ast.Node) bool {
-			for _, f := range pass.Files {
-				// 1つのファイルの中で、同一パッケージ名の回避以外にimport aliasを利用している箇所を検出する。
-				foundBases := make(map[string]int)
-				var impsWithName []*ast.ImportSpec
-				for _, imp := range f.Imports {
-					if imp.Name != nil {
-						if imp.Name.String() == "." { // "."の場合は無視する。
-							continue
-						}
-						if strings.HasPrefix(imp.Name.String(), "_") { // アンダースコアで始まる名前(単独も含む)の場合は無視する。
-							continue
-						}
-						impsWithName = append(impsWithName, imp)
-					}
-					foundBases[path.Base(imp.Path.Value)] += 1
-				}
-				for _, imp := range impsWithName {
-					if foundBases[path.Base(imp.Path.Value)] <= 1 {
-						pass.Reportf(imp.Pos(), "redundant import alias: %s %s", imp.Name.String(), imp.Path.Value)
-					}
-				}
+		// パッケージのベース名の出現回数と、別名付きインポートの情報を収集する。
+		baseNameCounts := make(map[string]int)
+		var impsWithName []*ast.ImportSpec
+		for _, imp := range f.Imports {
+			if imp.Path == nil {
+				continue
 			}
-			return true
-		})
+
+			if imp.Name != nil {
+				if shouldIgnore(imp.Name.String()) {
+					continue
+				}
+				impsWithName = append(impsWithName, imp)
+			}
+
+			baseNameCounts[baseName(imp)] += 1
+		}
+
+		// 1つのファイルの中で、同一パッケージ名の回避以外にimport aliasを利用している箇所を検出する。
+		for _, imp := range impsWithName {
+			if baseNameCounts[baseName(imp)] <= 1 {
+				pass.Reportf(imp.Pos(), "redundant import alias: %s %s", imp.Name.String(), imp.Path.Value)
+			}
+		}
 	}
 	return nil, nil
+}
+
+func shouldIgnore(name string) bool {
+	// ドットインポートやブランクインポートは、チェックの対象外とする。
+	// また、接頭辞としてのアンダースコアをチェック対象外とする理由は、
+	// 同一ファイル内における変数名とのコンフリクトを解消したい場合などに、
+	// 元のパッケージ名の先頭にアンダースコアを付与して回避するために利用することを想定している。
+	return name == "." || strings.HasPrefix(name, "_")
+}
+
+func baseName(imp *ast.ImportSpec) string {
+	// パスから引用符を除去してベース名を返す。
+	return path.Base(strings.Trim(imp.Path.Value, "\""))
 }
