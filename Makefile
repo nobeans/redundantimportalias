@@ -1,5 +1,5 @@
 .PHONY: all
-all: clean redundantimportalias
+all: clean lint test redundantimportalias
 
 redundantimportalias: redundantimportalias.go
 	@echo ">> Compiling..."
@@ -31,3 +31,8 @@ tools: tools
 lint:
 	@echo ">> Linting source code..."
 	golangci-lint run ./...
+
+.PHONY: test
+test:
+	@echo ">> Testing all..."
+	go test -race ./...
